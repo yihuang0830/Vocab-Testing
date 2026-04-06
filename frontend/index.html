@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>单词学习平台</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="login-page">
+    <div class="login-box">
+      <div class="login-logo">
+        <h1>📚 单词学习平台</h1>
+        <p>老师布置，学生背单词</p>
+      </div>
+
+      <div class="form-group">
+        <label>用户名</label>
+        <input type="text" id="login-username" placeholder="请输入用户名" autocomplete="username" />
+      </div>
+      <div class="form-group">
+        <label>密码</label>
+        <input type="password" id="login-password" placeholder="请输入密码" autocomplete="current-password" />
+      </div>
+      <p class="error-msg" id="login-error"></p>
+      <button class="btn btn-primary" style="width:100%" onclick="doLogin()">登录</button>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/js/auth.js"></script>
+  <script>
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+  </script>
+</body>
+</html>

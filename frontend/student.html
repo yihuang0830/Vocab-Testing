@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>学生学习 — 单词学习平台</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <header class="app-header">
+      <h1>📚 单词学习平台</h1>
+      <div class="user-info">
+        <span id="header-username">同学</span>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">退出</button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <!-- Sidebar: Assigned lists -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>我的单词表</h2>
+        </div>
+        <div class="sidebar-list" id="wordlist-sidebar"></div>
+      </aside>
+
+      <!-- Main content -->
+      <main class="main-content" id="main-content">
+        <div class="empty-state">
+          <div class="icon">🎯</div>
+          <p>请从左侧选择一个单词表开始学习</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/js/auth.js"></script>
+  <script src="/js/student.js"></script>
+</body>
+</html>

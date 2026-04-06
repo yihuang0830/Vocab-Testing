@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>老师仪表盘 — 单词学习平台</title>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body>
+  <div class="app-layout">
+    <!-- Header -->
+    <header class="app-header">
+      <h1>📚 单词学习平台</h1>
+      <div class="user-info">
+        <span id="header-username">老师</span>
+        <button class="btn btn-ghost btn-sm" onclick="logout()">退出</button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <!-- Sidebar: Word Lists -->
+      <aside class="sidebar">
+        <div class="sidebar-header">
+          <h2>单词列表</h2>
+          <button class="btn btn-primary btn-sm" onclick="showCreateListModal()">+ 新建</button>
+        </div>
+        <div class="sidebar-list" id="wordlist-sidebar"></div>
+        <div style="padding:12px;border-top:1px solid var(--border)">
+          <button class="btn btn-ghost btn-sm" style="width:100%" onclick="showStudentsModal()">👥 管理学生账号</button>
+        </div>
+      </aside>
+
+      <!-- Main content -->
+      <main class="main-content" id="main-content">
+        <div class="empty-state">
+          <div class="icon">📝</div>
+          <p>请从左侧选择或新建一个单词列表</p>
+        </div>
+      </main>
+    </div>
+  </div>
+
+  <!-- ===== Modal: Create List ===== -->
+  <div class="modal-overlay" id="modal-create-list">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>新建单词列表</h3>
+        <button class="modal-close" onclick="closeModal('modal-create-list')">×</button>
+      </div>
+      <div class="form-group">
+        <label>列表名称</label>
+        <input type="text" id="new-list-name" placeholder="例如：Unit 3 词汇" />
+      </div>
+      <p class="error-msg" id="create-list-error"></p>
+      <button class="btn btn-primary" style="width:100%" onclick="createList()">创建</button>
+    </div>
+  </div>
+
+  <!-- ===== Modal: Students ===== -->
+  <div class="modal-overlay" id="modal-students">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>管理学生账号</h3>
+        <button class="modal-close" onclick="closeModal('modal-students')">×</button>
+      </div>
+      <div style="margin-bottom:20px">
+        <h4 style="font-size:14px;margin-bottom:12px;color:var(--text-light)">新建学生账号</h4>
+        <div class="add-word-row">
+          <div class="form-group" style="flex:1">
+            <label>用户名</label>
+            <input type="text" id="new-student-username" placeholder="学生用户名" />
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>密码</label>
+            <input type="password" id="new-student-password" placeholder="初始密码" />
+          </div>
+          <button class="btn btn-primary" onclick="createStudent()">添加</button>
+        </div>
+        <p class="error-msg" id="student-error"></p>
+      </div>
+      <h4 style="font-size:14px;margin-bottom:10px;color:var(--text-light)">现有学生</h4>
+      <div id="student-list-modal" style="display:flex;flex-direction:column;gap:8px;max-height:240px;overflow-y:auto"></div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: Assign ===== -->
+  <div class="modal-overlay" id="modal-assign">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>布置给学生</h3>
+        <button class="modal-close" onclick="closeModal('modal-assign')">×</button>
+      </div>
+      <p style="font-size:14px;color:var(--text-light);margin-bottom:16px">选择要接收此单词列表的学生：</p>
+      <div class="student-check-list" id="assign-student-list"></div>
+      <div style="margin-top:20px;display:flex;gap:10px">
+        <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-assign')">取消</button>
+        <button class="btn btn-primary" style="flex:1" onclick="saveAssignment()">保存布置</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: Text Import ===== -->
+  <div class="modal-overlay" id="modal-text-import">
+    <div class="modal" style="max-width:620px">
+      <div class="modal-header">
+        <h3>📋 批量文本导入</h3>
+        <button class="modal-close" onclick="closeModal('modal-text-import')">×</button>
+      </div>
+      <p style="font-size:13px;color:var(--text-light);margin-bottom:12px;line-height:1.8">
+        每行一个单词，支持以下格式：<br>
+        <code style="background:var(--bg);padding:2px 6px;border-radius:4px">Lifeguard 救生员</code>
+        <code style="background:var(--bg);padding:2px 6px;border-radius:4px">Fat - 胖，贬义词</code>
+        <code style="background:var(--bg);padding:2px 6px;border-radius:4px">Surf 冲浪</code>
+      </p>
+      <div class="form-group">
+        <textarea id="text-import-input" rows="10" placeholder="粘贴单词文本，例如：&#10;Lifeguard 救生员&#10;Bathing in the sun 晒太阳（日光浴）&#10;Fat - 胖，非常贬义的一个词&#10;Towel 毛巾"></textarea>
+      </div>
+      <button class="btn btn-outline" style="margin-bottom:16px" onclick="previewTextImport()">预览解析结果</button>
+      <div id="text-import-preview" style="display:none">
+        <h4 style="font-size:14px;margin-bottom:10px;color:var(--text-light)">解析结果（可直接编辑）：</h4>
+        <div id="text-import-table"></div>
+        <div style="display:flex;gap:10px;margin-top:16px">
+          <button class="btn btn-ghost" style="flex:1" onclick="closeModal('modal-text-import')">取消</button>
+          <button class="btn btn-success" style="flex:1" onclick="saveTextImport()">保存到列表</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== Modal: OCR ===== -->
+  <div class="modal-overlay" id="modal-ocr">
+    <div class="modal" style="max-width:640px">
+      <div class="modal-header">
+        <h3>📷 扫描图片提取单词</h3>
+        <button class="modal-close" onclick="closeModal('modal-ocr')">×</button>
+      </div>
+
+      <div id="ocr-step1">
+        <div class="ocr-drop-zone" id="ocr-drop-zone" onclick="document.getElementById('ocr-file-input').click()">
+          <div class="icon">📸</div>
+          <p>点击或拖拽图片到此处</p>
+          <p style="font-size:12px;margin-top:4px">支持 JPG、PNG、HEIC 等格式</p>
+        </div>
+        <input type="file" id="ocr-file-input" accept="image/*" style="display:none" onchange="handleOCRFile(this)" />
+        <div id="ocr-preview-wrap" style="display:none;text-align:center">
+          <img id="ocr-preview-img" class="ocr-preview-img" />
+          <p style="font-size:13px;color:var(--text-light);margin-top:8px">图片已选择</p>
+        </div>
+        <div style="margin-top:16px;text-align:right">
+          <button class="btn btn-primary" id="ocr-scan-btn" onclick="runOCR()" style="display:none">开始扫描</button>
+        </div>
+      </div>
+
+      <div id="ocr-step2" style="display:none">
+        <p style="font-size:14px;color:var(--text-light);margin-bottom:12px">
+          识别到以下单词，请检查并补充中文翻译：
+        </p>
+        <div style="margin-bottom:12px;display:flex;gap:8px">
+          <button class="btn btn-ghost btn-sm" onclick="ocrTranslateAll()">全部AI翻译</button>
+          <button class="btn btn-ghost btn-sm" onclick="ocrAddRow()">+ 手动添加一行</button>
+        </div>
+        <div id="ocr-word-list"></div>
+        <div style="margin-top:20px;display:flex;gap:10px">
+          <button class="btn btn-ghost" style="flex:1" onclick="document.getElementById('ocr-step1').style.display='block';document.getElementById('ocr-step2').style.display='none'">重新扫描</button>
+          <button class="btn btn-success" style="flex:1" onclick="saveOCRWords()">保存到列表</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast-container"></div>
+
+  <script src="/js/auth.js"></script>
+  <script src="/js/teacher.js"></script>
+</body>
+</html>
