@@ -7,3 +7,4 @@ python-multipart==0.0.12
 pytesseract==0.3.13
 Pillow==11.0.0
 deep_translator==1.11.4
+psycopg2-binary==2.9.9
