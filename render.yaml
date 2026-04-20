@@ -2,12 +2,5 @@ services:
   - type: web
     name: vocab-app
     runtime: python
-    buildCommand: pip install -r backend/requirements.txt && pip install bcrypt==4.2.1
+    buildCommand: pip install -r backend/requirements.txt
     startCommand: cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT
-    envVars:
-      - key: DATA_DIR
-        value: /tmp
-    disk:
-      name: vocabdata
-      mountPath: /data
-      sizeGB: 1
