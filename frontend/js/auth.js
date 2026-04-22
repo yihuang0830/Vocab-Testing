@@ -39,14 +39,11 @@ function showToast(msg, type = '') {
   setTimeout(() => t.remove(), 3000);
 }
 
-// ---- TTS ----
+// ---- TTS (有道词典，在中国大陆可用) ----
 function speak(text) {
-  if (!window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utt = new SpeechSynthesisUtterance(text);
-  utt.lang = 'en-US';
-  utt.rate = 0.85;
-  window.speechSynthesis.speak(utt);
+  const url = 'https://dict.youdao.com/dictvoice?audio=' + encodeURIComponent(text) + '&type=2';
+  const audio = new Audio(url);
+  audio.play();
 }
 
 // ---- Modal helpers ----
