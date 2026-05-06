@@ -8,7 +8,7 @@ PORT = int(os.environ.get("PORT", 8001))
 
 from database import engine, SessionLocal
 import models
-from routers import users, wordlists, ocr, translate
+from routers import users, wordlists, translate
 
 # 创建数据库表
 models.Base.metadata.create_all(bind=engine)
@@ -33,7 +33,6 @@ app.add_middleware(
 # 注册路由
 app.include_router(users.router)
 app.include_router(wordlists.router)
-app.include_router(ocr.router)
 app.include_router(translate.router)
 
 # 服务前端静态文件
