@@ -1,0 +1,17 @@
+name: Keep Supabase Active
+
+on:
+  schedule:
+    # Run every 3 days at 03:17 UTC.
+    - cron: "17 3 */3 * *"
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Login ping
+        run: |
+          curl -fsS -X POST "${{ secrets.APP_URL }}/api/users/login" \
+            -H "Content-Type: application/json" \
+            -d "{\"username\":\"${{ secrets.TEACHER_USERNAME }}\",\"password\":\"${{ secrets.TEACHER_PASSWORD }}\"}"
