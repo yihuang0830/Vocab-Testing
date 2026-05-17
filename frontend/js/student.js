@@ -96,6 +96,7 @@ function renderModeSelector(listName) {
           <button class="btn btn-ghost btn-sm" onclick="togglePersonalTextImport()">取消</button>
         </div>
       </div>
+      ${personalWordPreview()}
     </div>
   ` : '';
 
@@ -121,6 +122,55 @@ function renderModeSelector(listName) {
         <div class="mode-icon">✍️</div>
         <div class="mode-label">拼写测试</div>
         <div class="mode-desc">看中文写英文</div>
+      </div>
+    </div>
+  `;
+}
+
+function personalWordPreview() {
+  if (!currentWords.length) {
+    return `
+      <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+        <h4 style="font-size:14px;color:var(--text-light);margin-bottom:10px">当前单词</h4>
+        <p style="font-size:13px;color:var(--text-light);padding:14px;background:var(--bg);border-radius:8px">还没有添加单词。</p>
+      </div>
+    `;
+  }
+
+  return `
+    <div style="margin-top:18px;border-top:1px solid var(--border);padding-top:16px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:10px;flex-wrap:wrap">
+        <h4 style="font-size:14px;color:var(--text-light);margin:0">当前单词（${currentWords.length} 个）</h4>
+        <span style="font-size:12px;color:var(--text-light)">添加后会立即显示在这里</span>
+      </div>
+      <div class="word-table-wrap" style="max-height:280px;overflow:auto;border:1px solid var(--border);border-radius:8px">
+        <table class="word-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>英文</th>
+              <th>中文</th>
+              <th>点读</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${currentWords.map((w, i) => `
+              <tr id="student-word-row-${w.id}">
+                <td style="color:var(--text-light);font-size:13px">${i + 1}</td>
+                <td><span class="word-english">${escHtml(w.english)}</span></td>
+                <td><span class="word-chinese">${escHtml(w.chinese || '—')}</span></td>
+                <td><button class="speak-btn" onclick="speak('${escAttr(w.english)}')" title="点读">🔊</button></td>
+                <td>
+                  <div style="display:flex;gap:6px;flex-wrap:wrap">
+                    <button class="btn btn-ghost btn-sm" onclick="editPersonalWord(${w.id}, '${escAttr(w.english)}', '${escAttr(w.chinese || '')}')">编辑</button>
+                    <button class="btn btn-danger btn-sm" onclick="deletePersonalWord(${w.id})">删除</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
       </div>
     </div>
   `;
@@ -712,6 +762,7 @@ async function translatePersonalEditWord(id) {
 }
 
 async function savePersonalWord(id) {
+  const returnToBrowse = currentMode === 'browse';
   const english = document.getElementById(`personal-edit-en-${id}`).value.trim();
   const chinese = document.getElementById(`personal-edit-zh-${id}`).value.trim();
   if (!english) { showToast('英文不能为空', 'error'); return; }
@@ -724,13 +775,14 @@ async function savePersonalWord(id) {
   if (res && res.ok) {
     showToast('已保存', 'success');
     await selectList(currentListId, document.querySelector('.sidebar-item.active .item-name')?.textContent || '', 'personal');
-    renderBrowse();
+    if (returnToBrowse) renderBrowse();
   } else {
     showToast('保存失败', 'error');
   }
 }
 
 async function deletePersonalWord(id) {
+  const returnToBrowse = currentMode === 'browse';
   if (!confirm('确认删除这个单词？')) return;
   const res = await apiFetch(`/api/wordlists/student/personal/${currentListId}/words/${id}`, {
     method: 'DELETE',
@@ -738,7 +790,7 @@ async function deletePersonalWord(id) {
   if (res && res.ok) {
     showToast('已删除', 'success');
     await selectList(currentListId, document.querySelector('.sidebar-item.active .item-name')?.textContent || '', 'personal');
-    renderBrowse();
+    if (returnToBrowse) renderBrowse();
     await loadSidebar();
   } else {
     showToast('删除失败', 'error');
