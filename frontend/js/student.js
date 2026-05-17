@@ -2,6 +2,7 @@ requireAuth('student');
 document.getElementById('header-username').textContent = getUsername() + ' 同学';
 
 let currentListId = null;
+let currentListSource = null;
 let currentWords = [];
 let currentMode = null;  // 'browse' | 'flashcard' | 'spelling'
 
@@ -12,23 +13,44 @@ async function loadSidebar() {
   const res = await apiFetch('/api/wordlists/student/mine');
   if (!res) return;
   const lists = await res.json();
+  const assignedLists = lists.filter(l => l.source !== 'personal');
+  const personalLists = lists.filter(l => l.source === 'personal');
 
   const el = document.getElementById('wordlist-sidebar');
   if (!lists.length) {
-    el.innerHTML = '<p style="padding:16px;font-size:13px;color:var(--text-light)">老师还没有布置单词</p>';
+    el.innerHTML = `
+      <p style="padding:16px;font-size:13px;color:var(--text-light)">老师还没有布置单词，你也可以先建立自己的单词本。</p>
+      <div style="padding:0 8px 8px">
+        <button class="btn btn-primary btn-sm" style="width:100%" onclick="showCreatePersonalList()">+ 自建单词本</button>
+      </div>
+    `;
     return;
   }
 
-  el.innerHTML = lists.map(l => `
-    <button class="sidebar-item ${l.id === currentListId ? 'active' : ''}" onclick="selectList(${l.id}, '${escAttr(l.name)}')">
-      <span class="item-name">${escHtml(l.name)}</span>
-      <span class="item-count">${l.word_count}</span>
-    </button>
-  `).join('');
+  el.innerHTML = `
+    ${sidebarSection('老师布置', assignedLists)}
+    ${sidebarSection('我的自建', personalLists)}
+    <div style="padding:8px">
+      <button class="btn btn-primary btn-sm" style="width:100%" onclick="showCreatePersonalList()">+ 自建单词本</button>
+    </div>
+  `;
 }
 
-async function selectList(id, name) {
+function sidebarSection(title, lists) {
+  return `
+    <div style="padding:10px 12px 4px;font-size:12px;font-weight:700;color:var(--text-light)">${title}</div>
+    ${lists.length ? lists.map(l => `
+      <button class="sidebar-item ${l.id === currentListId ? 'active' : ''}" onclick="selectList(${l.id}, '${escAttr(l.name)}', '${escAttr(l.source || '')}')">
+        <span class="item-name">${escHtml(l.name)}</span>
+        <span class="item-count">${l.word_count}</span>
+      </button>
+    `).join('') : `<p style="padding:8px 12px 12px;font-size:13px;color:var(--text-light)">暂无</p>`}
+  `;
+}
+
+async function selectList(id, name, source = '') {
   currentListId = id;
+  currentListSource = source;
   document.querySelectorAll('.sidebar-item').forEach(el => {
     el.classList.toggle('active', el.getAttribute('onclick').includes(`selectList(${id},`));
   });
@@ -43,9 +65,47 @@ async function selectList(id, name) {
 
 // ===== Mode Selector =====
 function renderModeSelector(listName) {
+  const personalTools = currentListSource === 'personal' ? `
+    <div class="card" style="margin-bottom:20px">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px">
+        <h3 style="font-size:15px;color:var(--text-light);margin:0">管理我的单词</h3>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-outline btn-sm" onclick="togglePersonalTextImport()">📋 批量导入</button>
+          <button class="btn btn-danger btn-sm" onclick="deletePersonalList()">删除词表</button>
+        </div>
+      </div>
+      <div class="add-word-row">
+        <div class="form-group">
+          <label>英文</label>
+          <input type="text" id="personal-new-english" placeholder="English word" />
+        </div>
+        <div class="form-group">
+          <label>中文</label>
+          <input type="text" id="personal-new-chinese" placeholder="中文翻译" />
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="translatePersonalNewWord()" title="AI翻译">🤖 AI翻译</button>
+        <button class="btn btn-primary" onclick="addPersonalWord()">添加</button>
+      </div>
+      <div id="personal-text-import" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:16px">
+        <div class="form-group">
+          <label>批量粘贴</label>
+          <textarea id="personal-text-import-input" rows="6" placeholder="例如：&#10;Break 读音&#10;Lifeguard 救生员&#10;Fat - 胖，非常贬义的一个词"></textarea>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn btn-primary btn-sm" onclick="savePersonalTextImport()">保存导入</button>
+          <button class="btn btn-ghost btn-sm" onclick="togglePersonalTextImport()">取消</button>
+        </div>
+      </div>
+    </div>
+  ` : '';
+
   document.getElementById('main-content').innerHTML = `
-    <h2 class="page-title">${escHtml(listName)}</h2>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px">
+      <h2 class="page-title" style="margin-bottom:0">${escHtml(listName)}</h2>
+      ${currentListSource === 'personal' ? '<span style="font-size:12px;color:var(--primary);background:rgba(79,110,247,0.1);padding:3px 8px;border-radius:999px">自建</span>' : ''}
+    </div>
     <p style="color:var(--text-light);font-size:14px;margin-bottom:20px">共 ${currentWords.length} 个单词，选择练习方式：</p>
+    ${personalTools}
     <div class="mode-selector">
       <div class="mode-card" onclick="startMode('browse')">
         <div class="mode-icon">📖</div>
@@ -73,9 +133,140 @@ function startMode(mode) {
   else if (mode === 'spelling') renderSpelling();
 }
 
+// ===== Personal Word Lists =====
+function showCreatePersonalList() {
+  currentListId = null;
+  currentListSource = null;
+  currentWords = [];
+  document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+  document.getElementById('main-content').innerHTML = `
+    <div class="card" style="max-width:520px;margin:0 auto">
+      <h2 class="page-title">自建单词本</h2>
+      <p style="color:var(--text-light);font-size:14px;margin-bottom:18px">可以放课堂外自己想背的单词，只有你自己能看到。</p>
+      <div class="form-group">
+        <label>单词本名称</label>
+        <input type="text" id="personal-list-name" placeholder="例如：我的错题词 / 旅行英语" />
+      </div>
+      <p class="error-msg" id="personal-list-error"></p>
+      <button class="btn btn-primary" style="width:100%" onclick="createPersonalList()">创建</button>
+    </div>
+  `;
+  setTimeout(() => document.getElementById('personal-list-name')?.focus(), 100);
+}
+
+async function createPersonalList() {
+  const name = document.getElementById('personal-list-name').value.trim();
+  const errEl = document.getElementById('personal-list-error');
+  if (!name) { errEl.textContent = '请输入单词本名称'; return; }
+
+  const res = await apiFetch('/api/wordlists/student/personal', {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+  const data = await res.json();
+  if (!res.ok) { errEl.textContent = data.detail || '创建失败'; return; }
+
+  showToast('已创建', 'success');
+  await loadSidebar();
+  selectList(data.id, data.name, 'personal');
+}
+
+async function deletePersonalList() {
+  if (!currentListId || currentListSource !== 'personal') return;
+  if (!confirm('确认删除这个自建单词本？此操作不可恢复。')) return;
+
+  const res = await apiFetch(`/api/wordlists/student/personal/${currentListId}`, { method: 'DELETE' });
+  if (res && res.ok) {
+    currentListId = null;
+    currentListSource = null;
+    currentWords = [];
+    document.getElementById('main-content').innerHTML = `
+      <div class="empty-state">
+        <div class="icon">📝</div>
+        <p>已删除。可以从左侧选择其他单词表，或重新自建。</p>
+      </div>
+    `;
+    await loadSidebar();
+    showToast('已删除', 'success');
+  }
+}
+
+async function translatePersonalNewWord() {
+  const english = document.getElementById('personal-new-english').value.trim();
+  if (!english) { showToast('请先输入英文单词', 'error'); return; }
+
+  const btn = event.target;
+  btn.textContent = '翻译中…';
+  btn.disabled = true;
+  const res = await apiFetch('/api/translate', {
+    method: 'POST',
+    body: JSON.stringify({ text: english }),
+  });
+  btn.textContent = '🤖 AI翻译';
+  btn.disabled = false;
+
+  if (res && res.ok) {
+    const data = await res.json();
+    document.getElementById('personal-new-chinese').value = data.translation;
+  } else {
+    showToast('翻译失败，请手动输入', 'error');
+  }
+}
+
+async function addPersonalWord() {
+  if (!currentListId || currentListSource !== 'personal') return;
+  const english = document.getElementById('personal-new-english').value.trim();
+  const chinese = document.getElementById('personal-new-chinese').value.trim();
+  if (!english) { showToast('请输入英文单词', 'error'); return; }
+
+  const res = await apiFetch(`/api/wordlists/student/personal/${currentListId}/words`, {
+    method: 'POST',
+    body: JSON.stringify({ english, chinese: chinese || null }),
+  });
+
+  if (res && res.ok) {
+    document.getElementById('personal-new-english').value = '';
+    document.getElementById('personal-new-chinese').value = '';
+    await selectList(currentListId, document.querySelector('.sidebar-item.active .item-name')?.textContent || '', 'personal');
+    await loadSidebar();
+    showToast('已添加', 'success');
+  } else {
+    showToast('添加失败', 'error');
+  }
+}
+
+function togglePersonalTextImport() {
+  const panel = document.getElementById('personal-text-import');
+  if (!panel) return;
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+  if (panel.style.display === 'block') {
+    setTimeout(() => document.getElementById('personal-text-import-input')?.focus(), 80);
+  }
+}
+
+async function savePersonalTextImport() {
+  const text = document.getElementById('personal-text-import-input').value;
+  const words = parseWordText(text);
+  if (!words.length) { showToast('未能解析出单词，请检查格式', 'error'); return; }
+
+  const res = await apiFetch(`/api/wordlists/student/personal/${currentListId}/words/bulk`, {
+    method: 'POST',
+    body: JSON.stringify({ words: words.map(w => ({ english: w.english, chinese: w.chinese || null })) }),
+  });
+
+  if (res && res.ok) {
+    showToast(`已导入 ${words.length} 个单词`, 'success');
+    await selectList(currentListId, document.querySelector('.sidebar-item.active .item-name')?.textContent || '', 'personal');
+    await loadSidebar();
+  } else {
+    showToast('导入失败', 'error');
+  }
+}
+
 // ===== Browse Mode =====
 function renderBrowse() {
   const listName = document.querySelector('.sidebar-item.active .item-name')?.textContent || '';
+  const canEdit = currentListSource === 'personal';
 
   document.getElementById('main-content').innerHTML = `
     <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap">
@@ -91,15 +282,24 @@ function renderBrowse() {
               <th>英文</th>
               <th>中文</th>
               <th>点读</th>
+              ${canEdit ? '<th>操作</th>' : ''}
             </tr>
           </thead>
           <tbody>
             ${currentWords.map((w, i) => `
-              <tr>
+              <tr id="student-word-row-${w.id}">
                 <td style="color:var(--text-light);font-size:13px">${i + 1}</td>
                 <td><span class="word-english">${escHtml(w.english)}</span></td>
                 <td><span class="word-chinese">${escHtml(w.chinese || '—')}</span></td>
                 <td><button class="speak-btn" onclick="speak('${escAttr(w.english)}')" title="点读">🔊</button></td>
+                ${canEdit ? `
+                  <td>
+                    <div style="display:flex;gap:6px;flex-wrap:wrap">
+                      <button class="btn btn-ghost btn-sm" onclick="editPersonalWord(${w.id}, '${escAttr(w.english)}', '${escAttr(w.chinese || '')}')">编辑</button>
+                      <button class="btn btn-danger btn-sm" onclick="deletePersonalWord(${w.id})">删除</button>
+                    </div>
+                  </td>
+                ` : ''}
               </tr>
             `).join('')}
           </tbody>
@@ -474,7 +674,104 @@ function showSpellingResult() {
   `;
 }
 
+// ===== Personal Word Editing =====
+function editPersonalWord(id, english, chinese) {
+  const row = document.getElementById(`student-word-row-${id}`);
+  if (!row) return;
+  row.innerHTML = `
+    <td style="color:var(--text-light);font-size:13px">✏️</td>
+    <td><input type="text" value="${escAttr(english)}" id="personal-edit-en-${id}" style="font-size:15px" /></td>
+    <td>
+      <div style="display:flex;gap:6px">
+        <input type="text" value="${escAttr(chinese)}" id="personal-edit-zh-${id}" style="font-size:15px;flex:1" />
+        <button class="btn btn-ghost btn-sm" onclick="translatePersonalEditWord(${id})">🤖</button>
+      </div>
+    </td>
+    <td></td>
+    <td>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button class="btn btn-success btn-sm" onclick="savePersonalWord(${id})">保存</button>
+        <button class="btn btn-ghost btn-sm" onclick="renderBrowse()">取消</button>
+      </div>
+    </td>
+  `;
+  document.getElementById(`personal-edit-en-${id}`).focus();
+}
+
+async function translatePersonalEditWord(id) {
+  const english = document.getElementById(`personal-edit-en-${id}`).value.trim();
+  if (!english) return;
+  const res = await apiFetch('/api/translate', {
+    method: 'POST',
+    body: JSON.stringify({ text: english }),
+  });
+  if (res && res.ok) {
+    const data = await res.json();
+    document.getElementById(`personal-edit-zh-${id}`).value = data.translation;
+  }
+}
+
+async function savePersonalWord(id) {
+  const english = document.getElementById(`personal-edit-en-${id}`).value.trim();
+  const chinese = document.getElementById(`personal-edit-zh-${id}`).value.trim();
+  if (!english) { showToast('英文不能为空', 'error'); return; }
+
+  const res = await apiFetch(`/api/wordlists/student/personal/${currentListId}/words/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ english, chinese: chinese || null }),
+  });
+
+  if (res && res.ok) {
+    showToast('已保存', 'success');
+    await selectList(currentListId, document.querySelector('.sidebar-item.active .item-name')?.textContent || '', 'personal');
+    renderBrowse();
+  } else {
+    showToast('保存失败', 'error');
+  }
+}
+
+async function deletePersonalWord(id) {
+  if (!confirm('确认删除这个单词？')) return;
+  const res = await apiFetch(`/api/wordlists/student/personal/${currentListId}/words/${id}`, {
+    method: 'DELETE',
+  });
+  if (res && res.ok) {
+    showToast('已删除', 'success');
+    await selectList(currentListId, document.querySelector('.sidebar-item.active .item-name')?.textContent || '', 'personal');
+    renderBrowse();
+    await loadSidebar();
+  } else {
+    showToast('删除失败', 'error');
+  }
+}
+
 // ===== Utils =====
+function parseWordText(text) {
+  const lines = text.trim().split('\n');
+  const words = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+
+    const dashMatch = trimmed.match(/^(.+?)\s+[-–]\s+(.+)$/);
+    if (dashMatch) {
+      words.push({ english: dashMatch[1].trim(), chinese: dashMatch[2].trim() });
+      continue;
+    }
+
+    const cjkMatch = trimmed.match(/^([a-zA-Z()',.·\s]+?)\s+([\u4e00-\u9fff\uff00-\uffef（(【].*)$/);
+    if (cjkMatch) {
+      words.push({ english: cjkMatch[1].trim(), chinese: cjkMatch[2].trim() });
+      continue;
+    }
+
+    if (/^[a-zA-Z\s'(),.]+$/.test(trimmed)) {
+      words.push({ english: trimmed, chinese: '' });
+    }
+  }
+  return words;
+}
+
 function escHtml(s) {
   return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }

@@ -33,8 +33,126 @@ def list_word_lists(
             name=wl.name,
             created_at=wl.created_at,
             word_count=len(wl.words),
+            source="teacher",
         ))
     return result
+
+
+def require_student(current_user: models.User):
+    if current_user.role != "student":
+        raise HTTPException(status_code=403, detail="仅限学生访问")
+
+
+def get_student_owned_list(wl_id: int, student: models.User, db: Session):
+    wl = db.query(models.WordList).filter(
+        models.WordList.id == wl_id,
+        models.WordList.teacher_id == student.id,
+    ).first()
+    if not wl:
+        raise HTTPException(status_code=404, detail="个人单词表不存在")
+    return wl
+
+
+@router.post("/student/personal", response_model=schemas.WordListOut)
+def create_personal_word_list(
+    req: schemas.WordListCreate,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    require_student(current_user)
+    wl = models.WordList(name=req.name, teacher_id=current_user.id)
+    db.add(wl)
+    db.commit()
+    db.refresh(wl)
+    return wl
+
+
+@router.delete("/student/personal/{wl_id}")
+def delete_personal_word_list(
+    wl_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    require_student(current_user)
+    wl = get_student_owned_list(wl_id, current_user, db)
+    db.delete(wl)
+    db.commit()
+    return {"ok": True}
+
+
+@router.post("/student/personal/{wl_id}/words", response_model=schemas.WordOut)
+def add_personal_word(
+    wl_id: int,
+    word: schemas.WordIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    require_student(current_user)
+    get_student_owned_list(wl_id, current_user, db)
+    w = models.Word(word_list_id=wl_id, english=word.english, chinese=word.chinese)
+    db.add(w)
+    db.commit()
+    db.refresh(w)
+    return w
+
+
+@router.post("/student/personal/{wl_id}/words/bulk")
+def add_personal_words_bulk(
+    wl_id: int,
+    req: schemas.BulkWordsRequest,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    require_student(current_user)
+    get_student_owned_list(wl_id, current_user, db)
+    words = [
+        models.Word(word_list_id=wl_id, english=w.english, chinese=w.chinese)
+        for w in req.words
+    ]
+    db.add_all(words)
+    db.commit()
+    return {"added": len(words)}
+
+
+@router.put("/student/personal/{wl_id}/words/{word_id}", response_model=schemas.WordOut)
+def update_personal_word(
+    wl_id: int,
+    word_id: int,
+    word: schemas.WordIn,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    require_student(current_user)
+    get_student_owned_list(wl_id, current_user, db)
+    w = db.query(models.Word).filter(
+        models.Word.id == word_id, models.Word.word_list_id == wl_id
+    ).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="单词不存在")
+    w.english = word.english
+    w.chinese = word.chinese
+    db.commit()
+    db.refresh(w)
+    return w
+
+
+@router.delete("/student/personal/{wl_id}/words/{word_id}")
+def delete_personal_word(
+    wl_id: int,
+    word_id: int,
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user),
+):
+    require_student(current_user)
+    get_student_owned_list(wl_id, current_user, db)
+    w = db.query(models.Word).filter(
+        models.Word.id == word_id, models.Word.word_list_id == wl_id
+    ).first()
+    if not w:
+        raise HTTPException(status_code=404, detail="单词不存在")
+    db.delete(w)
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/{wl_id}", response_model=schemas.WordListOut)
@@ -47,16 +165,17 @@ def get_word_list(
     if not wl:
         raise HTTPException(status_code=404, detail="单词列表不存在")
 
-    # 老师可以访问自己的，学生只能访问被分配的
+    # 老师可以访问自己的；学生可以访问老师布置的，也可以访问自己的个人单词表。
     if current_user.role == "teacher":
         if wl.teacher_id != current_user.id:
             raise HTTPException(status_code=403, detail="无权访问")
     else:
-        assigned = db.query(models.Assignment).filter(
+        owns_list = wl.teacher_id == current_user.id
+        assigned = None if owns_list else db.query(models.Assignment).filter(
             models.Assignment.word_list_id == wl_id,
             models.Assignment.student_id == current_user.id,
         ).first()
-        if not assigned:
+        if not owns_list and not assigned:
             raise HTTPException(status_code=403, detail="此单词列表未布置给你")
 
     return wl
@@ -215,20 +334,36 @@ def get_my_word_lists(
     db: Session = Depends(get_db),
     current_user: models.User = Depends(auth.get_current_user),
 ):
-    if current_user.role != "student":
-        raise HTTPException(status_code=403, detail="仅限学生访问")
+    require_student(current_user)
 
     assignments = db.query(models.Assignment).filter(
         models.Assignment.student_id == current_user.id
     ).all()
 
     result = []
+    seen_ids = set()
     for a in assignments:
         wl = a.word_list
+        seen_ids.add(wl.id)
         result.append(schemas.WordListSummary(
             id=wl.id,
             name=wl.name,
             created_at=wl.created_at,
             word_count=len(wl.words),
+            source="assigned",
+        ))
+
+    personal_lists = db.query(models.WordList).filter(
+        models.WordList.teacher_id == current_user.id
+    ).all()
+    for wl in personal_lists:
+        if wl.id in seen_ids:
+            continue
+        result.append(schemas.WordListSummary(
+            id=wl.id,
+            name=wl.name,
+            created_at=wl.created_at,
+            word_count=len(wl.words),
+            source="personal",
         ))
     return result

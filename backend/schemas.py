@@ -66,6 +66,7 @@ class WordListSummary(BaseModel):
     name: str
     created_at: datetime
     word_count: int
+    source: Optional[str] = None
 
     class Config:
         from_attributes = True

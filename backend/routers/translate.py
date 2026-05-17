@@ -10,7 +10,7 @@ router = APIRouter(prefix="/api/translate", tags=["translate"])
 @router.post("", response_model=schemas.TranslateResponse)
 def translate(
     req: schemas.TranslateRequest,
-    _: models.User = Depends(auth.require_teacher),
+    _: models.User = Depends(auth.get_current_user),
 ):
     text = req.text.strip()
     if not text:
