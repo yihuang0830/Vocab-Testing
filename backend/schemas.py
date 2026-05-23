@@ -51,6 +51,10 @@ class WordListCreate(BaseModel):
     name: str
 
 
+class WordListUpdate(BaseModel):
+    name: str
+
+
 class WordListOut(BaseModel):
     id: int
     name: str

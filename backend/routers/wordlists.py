@@ -197,6 +197,29 @@ def delete_word_list(
     return {"ok": True}
 
 
+@router.put("/{wl_id}", response_model=schemas.WordListOut)
+def update_word_list(
+    wl_id: int,
+    req: schemas.WordListUpdate,
+    db: Session = Depends(get_db),
+    teacher: models.User = Depends(auth.require_teacher),
+):
+    name = req.name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="请输入列表名称")
+
+    wl = db.query(models.WordList).filter(
+        models.WordList.id == wl_id, models.WordList.teacher_id == teacher.id
+    ).first()
+    if not wl:
+        raise HTTPException(status_code=404, detail="单词列表不存在")
+
+    wl.name = name
+    db.commit()
+    db.refresh(wl)
+    return wl
+
+
 @router.post("/{wl_id}/words", response_model=schemas.WordOut)
 def add_word(
     wl_id: int,

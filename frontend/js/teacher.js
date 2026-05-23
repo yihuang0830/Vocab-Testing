@@ -45,6 +45,7 @@ async function renderListDetail(id) {
     <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
       <h2 class="page-title" style="margin-bottom:0">${escHtml(list.name)}</h2>
       <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <button class="btn btn-outline btn-sm" onclick="renameList(${id}, '${escAttr(list.name)}')">重命名</button>
         <button class="btn btn-outline btn-sm" onclick="showTextImportModal()">📋 文本导入</button>
         <button class="btn btn-outline btn-sm" onclick="showOCRModal()">📷 扫描图片</button>
         <button class="btn btn-ghost btn-sm" onclick="showAssignModal()">📤 布置给学生</button>
@@ -136,6 +137,26 @@ async function createList() {
   showToast('创建成功', 'success');
   await loadSidebar();
   selectList(data.id);
+}
+
+// ===== Rename List =====
+async function renameList(id, currentName) {
+  const name = prompt('请输入新的列表名称', currentName)?.trim();
+  if (!name || name === currentName) return;
+
+  const res = await apiFetch(`/api/wordlists/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name }),
+  });
+
+  if (res && res.ok) {
+    showToast('列表名称已更新，学生端会同步显示', 'success');
+    await renderListDetail(id);
+    await loadSidebar();
+  } else {
+    const data = res ? await res.json() : {};
+    showToast(data.detail || '重命名失败', 'error');
+  }
 }
 
 // ===== Delete List =====
